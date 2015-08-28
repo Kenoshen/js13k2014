@@ -5,14 +5,14 @@ var canH = 450;
 var mouse = {x: 0, y: 0};
 var lastKeyState = {up: 0, down: 0, left: 0, right: 0, space: 0};
 var keyState = {up: 0, down: 0, left: 0, right: 0, space: 0};
-window.onload = function() {
+window.onload = function () {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
-    canvas.onmousemove = function(event){
+    canvas.onmousemove = function (event) {
         mouse.x = event.clientX;
         mouse.y = event.clientY;
     };
-    document.addEventListener('keydown', function(event) {
+    document.addEventListener('keydown', function (event) {
         var k = event.keyCode;
         console.log(event.keyCode);
         if (k == 38 || k == 87){
@@ -50,7 +50,7 @@ window.onload = function() {
     a.update = function(){
         this.x = mouse.x;
         this.y = mouse.y;
-    }
+    };
     objs.push(a);
     var a = new Obj(0, 0, 100, 100, "red");
     a.speed = 10;
