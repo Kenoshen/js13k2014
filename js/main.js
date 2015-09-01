@@ -115,6 +115,7 @@ window.onload = function () {
 
             team0 = [];
             team0.teamNumber = 0;
+            team0.flag = flagTeam0;
             var r = canW - canW * 0.3;
             var t = canH * 0.3;
             var m = canH * 0.5;
@@ -124,6 +125,7 @@ window.onload = function () {
             team0.push(new Player(r, b, 0, 3));
             team1 = [];
             team1.teamNumber = 1;
+            team1.flag = flagTeam1;
             var l = canW * 0.3;
             team1.push(new Player(l, t, 1, 1));
             team1.push(new Player(l, m, 1, 2));
@@ -219,8 +221,8 @@ window.onload = function () {
 
         } else if (gameState == SEND_DATA_TO_SERVER){
             changeGameState(PICK_PLAYER); // to reset and remove in-progress paths
-            // TODO: send data to server, set to MOVE_PLAYERS when it returns
-            // TODO: parse data from server into players.tmpPath
+            // send data to server, set to MOVE_PLAYERS when it returns
+            // parse data from server into players.tmpPath
             server.send(myTeam, otherTeam, function(data){
                 var parse = function(playerData, team, teamNumber){
                     var path = [];
@@ -300,6 +302,9 @@ window.onload = function () {
                     return true;
                 }
             });
+
+        } else if ((gameState == PICK_PLAYER || gameState == SELECT_PATH) && keyState.space && ! lastKeyState.space){
+            changeGameState(SEND_DATA_TO_SERVER);
         } else if (gameState == SELECT_PATH && mouseState.down && ! lastMouseState.down && ! curPathNode.invalid){
             changeGameState(ADD_PATH);
         } else if (gameState == MOVE_PLAYERS){
@@ -358,10 +363,6 @@ window.onload = function () {
             }
         }
 
-        if (keyState.space && ! lastKeyState.space){
-            changeGameState(SEND_DATA_TO_SERVER);
-        }
-
         // remove dead objects
         removeDeadObjs(updatables, "update", false);
         removeDeadObjs(updatables, "shouldBeDeleted", true);
@@ -401,11 +402,11 @@ function Player(x, y, team, number){
     this.isOut = 0;
     this.path = null;
     this.tmpPath = null;
-    this.maxPathDist = canW * 0.3;
+    this.maxPathDist = canW * 0.2;
     this.maxPathLen = 2;
     this.pathLen = 0;
     this.r = canW * 0.025;
-    this.speed = 10;
+    this.speed = 3;
     this.team = team;
     this.number = number;
     this.col = (team ? "#3399FF" : "#FF5050");
@@ -652,4 +653,64 @@ function Server(){
         });
         sendData(data, callback);
     }
+}
+
+function AI(aiTeam, playerTeam){
+    this.desiredAttackers = 1;
+    this.desiredDefenders = 2;
+    this.attackers = 0;
+    this.defenders = 0;
+    this.teamOut = 0;
+    this.team = aiTeam;
+    this.others = playerTeam;
+    this.othersOut = 0;
+    this.othersAttacking = 0;
+
+    this.team[0].aiRole = "defend";
+    this.team[2].aiRole = "defend";
+    this.team[1].aiRole = "attack";
+
+    this.getMoves = function(){
+        var data = {b:[]};
+
+        this.team.forEach(function(ai){
+            if (!ai.isOut) {
+                var d = {num: ai.number, team: ai.team, path:[]};
+                if (ai.aiRole == "defend") {
+                    // TODO: goal should be to track down nearest attacker
+                } else if (ai.aiRole == "save") {
+                    // TODO: goal should be to track down attacker with the flag
+                } else if (ai.aiRole == "attack") {
+                    // TODO: goal should be to get to the flag while avoiding defenders
+                } else if (ai.aiRole == "retreat") {
+                    // TODO: goal should be to get back into home territory while avoiding defenders
+                }
+            }
+        });
+
+        return data;
+    }
+
+    //function decideRoles(){
+    //    if (this.othersAttacking > 1){
+    //        this.desiredDefenders = 2;
+    //        this.desiredAttackers = 1;
+    //    } else if (this.othersOut > 0){
+    //        this.desiredDefenders = 1;
+    //        this.desiredAttackers = 2;
+    //    }
+    //    removeOuts(this.attackers);
+    //    removeOuts(this.defenders);
+    //    if (this.desiredDefenders < this.defenders.length){
+    //        var dif = this.defenders.length
+    //    }
+    //}
+    //
+    //function removeOuts(list){
+    //    for (var i = 0; i < list.length; i += 1){
+    //        if (list[i].isOut){
+    //            list.splice(i, 1);
+    //        }
+    //    }
+    //}
 }
