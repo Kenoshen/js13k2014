@@ -134,6 +134,8 @@ window.onload = function () {
             myTeam = team1;
             otherTeam = team0;
 
+            server.ai = new AI(otherTeam, myTeam);
+
             updatables = [];
             updatables.push(flagTeam0);
             updatables.push(flagTeam1);
@@ -612,26 +614,12 @@ function PathNode(x, y, previousPathNode, nextPathNode, team){
 }
 
 function Server(){
-    function sendData(data, callback){
+    this.ai = null;
+
+    this.sendData = function(data, callback){
         // TODO: make rest call or talk to AI?
 
-        data.b = [ // mock data
-            {
-                num: 1,
-                team: 1,
-                path: []
-            },
-            {
-                num: 2,
-                team: 1,
-                path: [{x: 100, y: 100}]
-            },
-            {
-                num: 3,
-                team: 1,
-                path: []
-            }
-        ];
+        data.b = this.ai.getMoves().b;
 
         setTimeout(function(){ // mock timeout
             callback(data);
@@ -651,11 +639,11 @@ function Server(){
             }
             data.a.push(p);
         });
-        sendData(data, callback);
+        this.sendData(data, callback);
     }
 }
 
-function AI(aiTeam, playerTeam){
+function AI(aiTeam, playerTeam, neutralZones){
     this.desiredAttackers = 1;
     this.desiredDefenders = 2;
     this.attackers = 0;
@@ -664,7 +652,7 @@ function AI(aiTeam, playerTeam){
     this.team = aiTeam;
     this.others = playerTeam;
     this.othersOut = 0;
-    this.othersAttacking = 0;
+    this.othersAttacking = [];
 
     this.team[0].aiRole = "defend";
     this.team[2].aiRole = "defend";
@@ -673,11 +661,31 @@ function AI(aiTeam, playerTeam){
     this.getMoves = function(){
         var data = {b:[]};
 
+        console.log(this.team);
+
+        this.othersAttacking = [];
+        this.othersAttackingLen = 0;
+        var self = this;
+        this.others.forEach(function(other){
+            if ((self.team.teamNumber ? (other.x < canW / 2) : (other.x > canW / 2))){
+                self.othersAttacking.push(other);
+            }
+        });
+        this.othersAttackingLen = this.othersAttacking.length;
+
         this.team.forEach(function(ai){
             if (!ai.isOut) {
                 var d = {num: ai.number, team: ai.team, path:[]};
                 if (ai.aiRole == "defend") {
                     // TODO: goal should be to track down nearest attacker
+                    if (self.othersAttacking.length > 0){
+                        var pos = {x: self.othersAttacking[0].x, y: self.othersAttacking[0].y};
+                        var diffToFlag = diff(pos.x, pos.y, self.team.flag.x, self.team.flag.y);
+                        diffToFlag.x *= 0.5;
+                        diffToFlag.y *= 0.5;
+                        self.getPath(ai, {x: pos.x - diffToFlag.x, y: pos.y - diffToFlag.y}, d.path);
+                        self.othersAttacking.splice(0, 1);
+                    }
                 } else if (ai.aiRole == "save") {
                     // TODO: goal should be to track down attacker with the flag
                 } else if (ai.aiRole == "attack") {
@@ -685,10 +693,33 @@ function AI(aiTeam, playerTeam){
                 } else if (ai.aiRole == "retreat") {
                     // TODO: goal should be to get back into home territory while avoiding defenders
                 }
+                data.b.push(d);
             }
         });
 
         return data;
+    }
+
+    this.getPath = function(ai, target, path){
+        var dif = diff(target.x, target.y, ai.x, ai.y);
+        var nor = norm(dif.x, dif.y);
+
+        function getP(start, dir, target){
+            var p = {x: start.x, y: start.y};
+            if (dst(start.x, start.y, target.x, target.y) > ai.maxPathDist){
+                p.x += dir.x * ai.maxPathDist;
+                p.y += dir.y * ai.maxPathDist;
+            } else {
+                p.x = target.x;
+                p.y = target.y;
+            }
+            return p;
+        }
+
+        var seg0 = getP(ai, nor, target);
+        var seg1 = getP(seg0, nor, target);
+        path.push(seg0);
+        path.push(seg1);
     }
 
     //function decideRoles(){
