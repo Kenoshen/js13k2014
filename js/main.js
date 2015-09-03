@@ -644,19 +644,69 @@ function Server(){
 }
 
 function AI(aiTeam, playerTeam, neutralZones){
-    this.desiredAttackers = 1;
-    this.desiredDefenders = 2;
-    this.attackers = 0;
-    this.defenders = 0;
-    this.teamOut = 0;
     this.team = aiTeam;
     this.others = playerTeam;
-    this.othersOut = 0;
-    this.othersAttacking = [];
 
-    this.team[0].aiRole = "defend";
-    this.team[2].aiRole = "defend";
-    this.team[1].aiRole = "attack";
+    function getNextAvailableAI(){
+        for (var i = 0; i < self.team.length; i++){
+            if (!self.team[i].aiRole && !self.team[i].isOut){
+                return self.team[i]
+            }
+        }
+    }
+
+    function getNearestEnemy(ai, start){
+        var nearest = start || 10000000;
+        var nearestEnemy = null;
+        for (var i = 0; i < self.others.length; i++){
+            var d = dst(self.others[i].x, self.others[i].y, ai.x, ai.y);
+            if (d < nearest && !self.others[i].isOut){
+                nearest = d;
+                nearestEnemy = self.others[i];
+            }
+        }
+        return nearestEnemy;
+    }
+
+    function isEnemyAttacking(enemy){
+        return (self.team.teamNumber ? (enemy.x < canW / 2) : (enemy.x > canW / 2))
+    }
+
+    function numberOfAttackingEnemies(){
+        var count = 0;
+        self.others.forEach(function(enemy){
+            count += (isEnemyAttacking() ? 1 : 0);
+        });
+        return count;
+    }
+
+    function numberOfOutEnemies(){
+        var count = 0;
+        self.others.forEach(function(enemy){
+            count += (enemy.isOut ? 1 : 0);
+        });
+        return count;
+    }
+
+    function numberOfDefenders(){
+        var count = 0;
+        self.team.forEach(function(ai){
+            count += (ai.aiRole == "defend" ? 1 : 0); // TODO: maybe make this defend or idle
+        });
+        return count;
+    }
+
+    function numberOfOutTeammates(){
+        var count = 0;
+        self.team.forEach(function(ai){
+            count += (ai.isOut ? 1 : 0);
+        });
+        return count;
+    }
+
+    this.getRoles = function(){
+
+    }
 
     this.getMoves = function(){
         var data = {b:[]};
@@ -667,7 +717,7 @@ function AI(aiTeam, playerTeam, neutralZones){
         this.othersAttackingLen = 0;
         var self = this;
         this.others.forEach(function(other){
-            if ((self.team.teamNumber ? (other.x < canW / 2) : (other.x > canW / 2))){
+            if (isEnemyAttacking(other)){
                 self.othersAttacking.push(other);
             }
         });
@@ -721,6 +771,8 @@ function AI(aiTeam, playerTeam, neutralZones){
         path.push(seg0);
         path.push(seg1);
     }
+
+
 
     //function decideRoles(){
     //    if (this.othersAttacking > 1){
