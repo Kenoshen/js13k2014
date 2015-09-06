@@ -646,6 +646,7 @@ function Server(){
 function AI(aiTeam, playerTeam, neutralZones){
     this.team = aiTeam;
     this.others = playerTeam;
+    this.state = {others:{}, desired:{}};
 
     function getNextAvailableAI(){
         for (var i = 0; i < self.team.length; i++){
@@ -673,11 +674,12 @@ function AI(aiTeam, playerTeam, neutralZones){
     }
 
     function numberOfAttackingEnemies(){
-        var count = 0;
+        self.others.attacking = [];
         self.others.forEach(function(enemy){
-            count += (isEnemyAttacking() ? 1 : 0);
+            if(isEnemyAttacking()){
+                self.others.attacking.push(enemy);
+            }
         });
-        return count;
     }
 
     function numberOfOutEnemies(){
@@ -685,15 +687,16 @@ function AI(aiTeam, playerTeam, neutralZones){
         self.others.forEach(function(enemy){
             count += (enemy.isOut ? 1 : 0);
         });
-        return count;
+        self.state.others.out = count;
     }
 
     function numberOfDefenders(){
-        var count = 0;
+        self.state.defenders = []
         self.team.forEach(function(ai){
-            count += (ai.aiRole == "defend" ? 1 : 0); // TODO: maybe make this defend or idle
+            if (ai.aiRole == "defend"){
+                self.state.defenders.push(ai);
+            }
         });
-        return count;
     }
 
     function numberOfOutTeammates(){
@@ -701,11 +704,45 @@ function AI(aiTeam, playerTeam, neutralZones){
         self.team.forEach(function(ai){
             count += (ai.isOut ? 1 : 0);
         });
-        return count;
+        self.state.out = count;
+    }
+
+    function getDesired(){
+        if(self.state.out <= 0){
+            if (self.state.others.out <= 0){
+                self.state.desired.attack = 1;
+                self.state.desired.defend = 2;
+            } else if (self.state.others.out > 0){
+                self.state.desired.attack = 2;
+                self.state.desired.defend = 1;
+            }
+        } else if (self.state.out == 1){
+            self.state.desired.attack = 1;
+            self.state.desired.defend = 1;
+        } else if (self.state.out >= 2){
+            self.state.desired.attack = 0;
+            self.state.desired.defend = 1;
+        }
     }
 
     this.getRoles = function(){
+        numberOfAttackingEnemies();
+        numberOfDefenders();
+        numberOfOutEnemies();
+        numberOfOutTeammates();
+        getDesired();
 
+        var state = this.state;
+
+        this.team.forEach(function(ai){
+            if (state.desired.defend > 0){
+                ai.aiRole = "defend";
+                state.desired.defend -= 1;
+            } else if (state.desired.attack > 0){
+                ai.aiRole = "attack";
+                state.desired.attack -= 1;
+            }
+        });
     }
 
     this.getMoves = function(){
