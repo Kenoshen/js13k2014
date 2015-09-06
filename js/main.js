@@ -657,20 +657,31 @@ function AI(aiTeam, playerTeam, neutralZones){
     }
 
     function getEnemies(ai){
-
+        var enemies = [];
         function compare(a, b){
-            // TODO: do compare on distance to ai
-        }
-        var nearest = start || 10000000;
-        var nearestEnemy = null;
-        for (var i = 0; i < self.others.length; i++){
-            var d = dst(self.others[i].x, self.others[i].y, ai.x, ai.y);
-            if (d < nearest && !self.others[i].isOut){
-                nearest = d;
-                nearestEnemy = self.others[i];
+            // do compare on distance to ai
+            if (dst(ai.x, ai.y, a.x, a.y) > dst(ai.x, ai.y, b.x, b.y)){
+                return -1;
+            } else {
+                return 1;
             }
         }
-        return nearestEnemy;
+        self.others.forEach(function(other){
+            if (!other.isOut){
+                var placed = false;
+                for (var i = 0; i < enemies.length; i += 1){
+                    if (compare(enemies[i], other) == -1){
+                        enemies.splice(i, 0, other);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed){
+                    enemies.push(other);
+                }
+            }
+        });
+        return enemies;
     }
 
     function isEnemyAttacking(enemy){
@@ -712,8 +723,12 @@ function AI(aiTeam, playerTeam, neutralZones){
     }
 
     function getDesired(){
+        self.state.desired = {save: 0, defend: 0, attack: 0};
         if(self.state.out <= 0){
-            if (self.state.others.out <= 0){
+            if (self.team.flag.carried){
+                self.state.desired.save = 2;
+                self.state.desired.attack = 1;
+            } else if (self.state.others.out <= 0){
                 self.state.desired.attack = 1;
                 self.state.desired.defend = 2;
             } else if (self.state.others.out > 0){
@@ -721,11 +736,21 @@ function AI(aiTeam, playerTeam, neutralZones){
                 self.state.desired.defend = 1;
             }
         } else if (self.state.out == 1){
-            self.state.desired.attack = 1;
-            self.state.desired.defend = 1;
+            if (self.team.flag.carried){
+                self.state.desired.save = 1;
+                self.state.desired.attack = 1;
+            } else {
+                self.state.desired.attack = 1;
+                self.state.desired.defend = 1;
+            }
         } else if (self.state.out >= 2){
-            self.state.desired.attack = 0;
-            self.state.desired.defend = 1;
+            if (self.team.flag.carried){
+                self.state.desired.save = 1;
+                self.state.desired.attack = 0;
+            } else {
+                self.state.desired.attack = 0;
+                self.state.desired.defend = 1;
+            }
         }
     }
 
@@ -745,32 +770,23 @@ function AI(aiTeam, playerTeam, neutralZones){
             }
         });
         numberOfDefenders();
+        state.defenders.forEach(function(defender){
+            // TODO: decide which defender should go for which thing, and maybe do more complicated behavior?
+        });
     }
 
     this.getMoves = function(){
         var state = this.state;
         this.getRoles();
 
-        var data = {b:[]};
-
-        console.log(this.team);
-
-        this.othersAttacking = [];
-        this.othersAttackingLen = 0;
-        var self = this;
-        this.others.forEach(function(other){
-            if (isEnemyAttacking(other)){
-                self.othersAttacking.push(other);
-            }
-        });
-        this.othersAttackingLen = this.othersAttacking.length;
+        var data = [];
 
         this.team.forEach(function(ai){
             if (!ai.isOut) {
                 var d = {num: ai.number, team: ai.team, path:[]};
                 if (ai.aiRole == "defend") {
-                    // TODO: goal should be to track down nearest attacker
-                    if (self.othersAttacking.length > 0){
+                    // goal should be to track down nearest attacker
+                    if (state.others.attacking.length > 0){
                         var pos = {x: self.othersAttacking[0].x, y: self.othersAttacking[0].y};
                         var diffToFlag = diff(pos.x, pos.y, self.team.flag.x, self.team.flag.y);
                         diffToFlag.x *= 0.5;
@@ -785,7 +801,7 @@ function AI(aiTeam, playerTeam, neutralZones){
                 } else if (ai.aiRole == "retreat") {
                     // TODO: goal should be to get back into home territory while avoiding defenders
                 }
-                data.b.push(d);
+                data.push(d);
             }
         });
 
