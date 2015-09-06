@@ -656,7 +656,11 @@ function AI(aiTeam, playerTeam, neutralZones){
         }
     }
 
-    function getNearestEnemy(ai, start){
+    function getEnemies(ai){
+
+        function compare(a, b){
+            // TODO: do compare on distance to ai
+        }
         var nearest = start || 10000000;
         var nearestEnemy = null;
         for (var i = 0; i < self.others.length; i++){
@@ -727,13 +731,10 @@ function AI(aiTeam, playerTeam, neutralZones){
 
     this.getRoles = function(){
         numberOfAttackingEnemies();
-        numberOfDefenders();
         numberOfOutEnemies();
         numberOfOutTeammates();
         getDesired();
-
         var state = this.state;
-
         this.team.forEach(function(ai){
             if (state.desired.defend > 0){
                 ai.aiRole = "defend";
@@ -743,9 +744,13 @@ function AI(aiTeam, playerTeam, neutralZones){
                 state.desired.attack -= 1;
             }
         });
+        numberOfDefenders();
     }
 
     this.getMoves = function(){
+        var state = this.state;
+        this.getRoles();
+
         var data = {b:[]};
 
         console.log(this.team);
