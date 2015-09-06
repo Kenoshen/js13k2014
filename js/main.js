@@ -93,6 +93,8 @@ window.onload = function () {
     var flagTeam1 = null;
     var myTeam = null;
     var otherTeam = null;
+    var myTeamAI = null;
+    var otherTeamAI = null;
     var updatables = null;
     var drawables = null;
     var pathObjs = null;
@@ -134,7 +136,8 @@ window.onload = function () {
             myTeam = team1;
             otherTeam = team0;
 
-            server.ai = new AI(otherTeam, myTeam);
+            myTeamAI = new AI(myTeam, otherTeam);
+            otherTeamAI = new AI(otherTeam, myTeam);
 
             updatables = [];
             updatables.push(flagTeam0);
@@ -225,7 +228,34 @@ window.onload = function () {
             changeGameState(PICK_PLAYER); // to reset and remove in-progress paths
             // send data to server, set to MOVE_PLAYERS when it returns
             // parse data from server into players.tmpPath
-            server.send(myTeam, otherTeam, function(data){
+            var tempArray = [];
+            function handleTempPath(player) {
+                var p = {num: player.number, team: player.team, path: []};
+                var curPath = player.tmpPath;
+                while (curPath) {
+                    p.path.push({x: curPath.x, y: curPath.y});
+                    curPath = curPath.nextPathNode;
+                }
+                tempArray.push(p);
+            }
+            var myTeamPath = null;
+            if (!myTeamAI) {
+                tempArray = [];
+                myTeam.forEach(handleTempPath);
+                myTeamPath = tempArray;
+            } else {
+                myTeamPath = myTeamAI.getMoves();
+            }
+
+            var otherTeamPath = null;
+            if (!otherTeamAI){
+                tempArray = [];
+                otherTeam.forEach(handleTempPath);
+                otherTeamPath = tempArray;
+            } else {
+                otherTeamPath = otherTeamAI.getMoves();
+            }
+            server.send(myTeamPath, otherTeamPath, function(data){
                 var parse = function(playerData, team, teamNumber){
                     var path = [];
                     playerData.path.forEach(function(p){
@@ -344,6 +374,7 @@ window.onload = function () {
                 }
                 if (!flagTeam1.carried && player.contains({x:flagTeam1.x, y:flagTeam1.y})){
                     flagTeam1.carried = player;
+                    player.carryingFlag = true;
                 }
             });
             var allTeam1IsOut = true;
@@ -353,6 +384,7 @@ window.onload = function () {
                 }
                 if (!flagTeam0.carried && player.contains({x:flagTeam0.x, y:flagTeam0.y})){
                     flagTeam0.carried = player;
+                    player.carryingFlag = true;
                 }
             });
 
@@ -404,7 +436,8 @@ function Player(x, y, team, number){
     this.isOut = 0;
     this.path = null;
     this.tmpPath = null;
-    this.maxPathDist = canW * 0.2;
+    this.carryingFlag = false;
+    this.maxPathDist = canW * 0.1;
     this.maxPathLen = 2;
     this.pathLen = 0;
     this.r = canW * 0.025;
@@ -450,6 +483,7 @@ function Player(x, y, team, number){
     }
     this.tagYouAreOut = function(){
         this.isOut = true;
+        this.carryingFlag = false;
         var recPathDestroy = function(path){
             if (path && path.destroy && ! path.shouldBeDeleted){
                 path.shouldBeDeleted = true;
@@ -614,36 +648,24 @@ function PathNode(x, y, previousPathNode, nextPathNode, team){
 }
 
 function Server(){
-    this.ai = null;
-
-    this.sendData = function(data, callback){
-        // TODO: make rest call or talk to AI?
-
-        data.b = this.ai.getMoves().b;
-
+    sendData = function(data, callback){
+        // TODO: switch on doing rest call or not
         setTimeout(function(){ // mock timeout
             callback(data);
         }, 1000);
     }
-    this.send = function(listOfPlayers, otherListOfPlayers, callback){
+    this.send = function(myTeamPaths, otherTeamPaths, callback){
         var data = {
-            id: "game id from server?",
-            a: []
+            id: "game id from server?"
         };
-        listOfPlayers.forEach(function(player){
-            var p = {num: player.number, team: player.team, path: []};
-            var curPath = player.tmpPath;
-            while(curPath){
-                p.path.push({x: curPath.x, y: curPath.y});
-                curPath = curPath.nextPathNode;
-            }
-            data.a.push(p);
-        });
-        this.sendData(data, callback);
+        data.a = myTeamPaths;
+        data.b = otherTeamPaths;
+        sendData(data, callback);
     }
 }
 
 function AI(aiTeam, playerTeam, neutralZones){
+    var self = this;
     this.team = aiTeam;
     this.others = playerTeam;
     this.state = {others:{}, desired:{}};
@@ -689,10 +711,10 @@ function AI(aiTeam, playerTeam, neutralZones){
     }
 
     function numberOfAttackingEnemies(){
-        self.others.attacking = [];
+        self.state.others.attacking = [];
         self.others.forEach(function(enemy){
-            if(isEnemyAttacking()){
-                self.others.attacking.push(enemy);
+            if(isEnemyAttacking(enemy)){
+                self.state.others.attacking.push(enemy);
             }
         });
     }
@@ -761,6 +783,7 @@ function AI(aiTeam, playerTeam, neutralZones){
         getDesired();
         var state = this.state;
         this.team.forEach(function(ai){
+            ai.enemyTarget = null;
             if (state.desired.defend > 0){
                 ai.aiRole = "defend";
                 state.desired.defend -= 1;
@@ -770,9 +793,11 @@ function AI(aiTeam, playerTeam, neutralZones){
             }
         });
         numberOfDefenders();
-        state.defenders.forEach(function(defender){
-            // TODO: decide which defender should go for which thing, and maybe do more complicated behavior?
-        });
+        //state.defenders.forEach(function(defender){
+        //    // TODO: decide which defender should go for which thing, and maybe do more complicated behavior?
+        //    var enemies = getEnemies(defender);
+        //
+        //});
     }
 
     this.getMoves = function(){
@@ -787,19 +812,28 @@ function AI(aiTeam, playerTeam, neutralZones){
                 if (ai.aiRole == "defend") {
                     // goal should be to track down nearest attacker
                     if (state.others.attacking.length > 0){
-                        var pos = {x: self.othersAttacking[0].x, y: self.othersAttacking[0].y};
+                        var enemies = getEnemies(ai);
+                        var pos = {x: enemies[0].x, y: enemies[0].y};
                         var diffToFlag = diff(pos.x, pos.y, self.team.flag.x, self.team.flag.y);
                         diffToFlag.x *= 0.5;
                         diffToFlag.y *= 0.5;
                         self.getPath(ai, {x: pos.x - diffToFlag.x, y: pos.y - diffToFlag.y}, d.path);
-                        self.othersAttacking.splice(0, 1);
                     }
                 } else if (ai.aiRole == "save") {
-                    // TODO: goal should be to track down attacker with the flag
+                    // goal should be to track down attacker with the flag
+                    var enemies = getEnemies(ai);
+                    var pos = {x: enemies[0].x, y: enemies[0].y};
+                    var mid = (pos.x - canW / 2) / 2 + pos.x;
+                    self.getPath(ai, {x: pos.x - mid, y: pos.y}, d.path);
                 } else if (ai.aiRole == "attack") {
-                    // TODO: goal should be to get to the flag while avoiding defenders
-                } else if (ai.aiRole == "retreat") {
-                    // TODO: goal should be to get back into home territory while avoiding defenders
+                    if (ai.carryingFlag){
+                        // TODO: goal should be to get back into home territory while avoiding defenders
+                        self.getPath(ai, {x: self.team.flag.x, y: self.team.flag.y}, d.path);
+                    } else {
+                        // TODO: goal should be to get to the flag while avoiding defenders
+                        self.getPath(ai, {x: self.others.flag.x, y: self.others.flag.y}, d.path);
+                    }
+
                 }
                 data.push(d);
             }
@@ -821,7 +855,13 @@ function AI(aiTeam, playerTeam, neutralZones){
                 p.x = target.x;
                 p.y = target.y;
             }
-            return p;
+
+            var distanceToMid = dst(p.x, p.y, start.x, start.y) * 0.5;
+            var randVect = {x: (Math.random() * 2 - 1) * distanceToMid, y: (Math.random() * 2 - 1) * distanceToMid};
+            return {
+                x: start.x + (dir.x * distanceToMid) + randVect.x,
+                y: start.y + (dir.y * distanceToMid) + randVect.y
+            };
         }
 
         var seg0 = getP(ai, nor, target);
@@ -829,29 +869,4 @@ function AI(aiTeam, playerTeam, neutralZones){
         path.push(seg0);
         path.push(seg1);
     }
-
-
-
-    //function decideRoles(){
-    //    if (this.othersAttacking > 1){
-    //        this.desiredDefenders = 2;
-    //        this.desiredAttackers = 1;
-    //    } else if (this.othersOut > 0){
-    //        this.desiredDefenders = 1;
-    //        this.desiredAttackers = 2;
-    //    }
-    //    removeOuts(this.attackers);
-    //    removeOuts(this.defenders);
-    //    if (this.desiredDefenders < this.defenders.length){
-    //        var dif = this.defenders.length
-    //    }
-    //}
-    //
-    //function removeOuts(list){
-    //    for (var i = 0; i < list.length; i += 1){
-    //        if (list[i].isOut){
-    //            list.splice(i, 1);
-    //        }
-    //    }
-    //}
 }
