@@ -136,8 +136,14 @@ window.onload = function () {
             myTeam = team1;
             otherTeam = team0;
 
-            myTeamAI = new AI(myTeam, otherTeam);
-            otherTeamAI = new AI(otherTeam, myTeam);
+            //myTeamAI = new AI(myTeam, otherTeam, [
+            //    neutralZones[0],
+            //    neutralZones[2]
+            //]);
+            otherTeamAI = new AI(otherTeam, myTeam, [
+                neutralZones[0],
+                neutralZones[1]
+            ]);
 
             updatables = [];
             updatables.push(flagTeam0);
@@ -160,7 +166,11 @@ window.onload = function () {
             }
             team0.forEach(resetPlayer);
             team1.forEach(resetPlayer);
-            changeGameState(PICK_PLAYER);
+            if (myTeamAI && otherTeamAI){
+                changeGameState(SEND_DATA_TO_SERVER);
+            } else {
+                changeGameState(PICK_PLAYER);
+            }
 
         } else if (gameState == PICK_PLAYER){
             if (curPathNode){
@@ -226,6 +236,7 @@ window.onload = function () {
 
         } else if (gameState == SEND_DATA_TO_SERVER){
             changeGameState(PICK_PLAYER); // to reset and remove in-progress paths
+            gameState = SEND_DATA_TO_SERVER; // then manually change back to send data
             // send data to server, set to MOVE_PLAYERS when it returns
             // parse data from server into players.tmpPath
             var tempArray = [];
@@ -471,7 +482,6 @@ function Player(x, y, team, number){
                     this.path.previousPathNode = this;
                 }
                 p.destroy();
-                console.log("Destroy");
             } else {
                 var nD = norm(d.x, d.y);
                 nD.x *= this.speed;
@@ -512,7 +522,7 @@ function Player(x, y, team, number){
 }
 
 function NeutralZone(){
-    this.percentW = canW * 0.05;
+    this.percentW = canW * 0.03;
     this.center = canW / 2;
     this.left = this.center - this.percentW;
     this.right = this.center + this.percentW;
@@ -652,7 +662,7 @@ function Server(){
         // TODO: switch on doing rest call or not
         setTimeout(function(){ // mock timeout
             callback(data);
-        }, 1000);
+        }, 10);
     }
     this.send = function(myTeamPaths, otherTeamPaths, callback){
         var data = {
@@ -668,6 +678,7 @@ function AI(aiTeam, playerTeam, neutralZones){
     var self = this;
     this.team = aiTeam;
     this.others = playerTeam;
+    this.neutralZones = neutralZones;
     this.state = {others:{}, desired:{}};
 
     function getNextAvailableAI(){
@@ -770,8 +781,8 @@ function AI(aiTeam, playerTeam, neutralZones){
                 self.state.desired.save = 1;
                 self.state.desired.attack = 0;
             } else {
-                self.state.desired.attack = 0;
-                self.state.desired.defend = 1;
+                self.state.desired.attack = 1;
+                self.state.desired.defend = 0;
             }
         }
     }
@@ -857,11 +868,27 @@ function AI(aiTeam, playerTeam, neutralZones){
             }
 
             var distanceToMid = dst(p.x, p.y, start.x, start.y) * 0.5;
-            var randVect = {x: (Math.random() * 2 - 1) * distanceToMid, y: (Math.random() * 2 - 1) * distanceToMid};
-            return {
-                x: start.x + (dir.x * distanceToMid) + randVect.x,
-                y: start.y + (dir.y * distanceToMid) + randVect.y
+
+            var inN = false;
+            function isInNZ(neutralZone){
+                if (neutralZone.contains(pos)){
+                    inN = true;
+                }
             };
+            for (var i = 0; i < 10; i += 1){
+                inN = false;
+                var randVect = {x: (Math.random() * 2 - 1) * distanceToMid, y: (Math.random() * 2 - 1) * distanceToMid};
+                var pos = {
+                    x: start.x + (dir.x * distanceToMid) + randVect.x,
+                    y: start.y + (dir.y * distanceToMid) + randVect.y
+                };
+                neutralZones.forEach(isInNZ);
+                if (!inN){
+                    return pos;
+                }
+            }
+            console.error("Could not find position");
+            return start;
         }
 
         var seg0 = getP(ai, nor, target);
