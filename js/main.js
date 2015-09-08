@@ -10,6 +10,7 @@ var lastMouseState = {x: 0, y: 0, down: false};
 var lastKeyState = {up: 0, down: 0, left: 0, right: 0, space: 0};
 var keyState = {up: 0, down: 0, left: 0, right: 0, space: 0};
 
+var WAIT_FOR_SERVER = "waitforserver";
 var SETUP = "setup";
 var NEW_TURN = "newturn";
 var PICK_PLAYER = "pickplayer";
@@ -19,6 +20,10 @@ var SEND_DATA_TO_SERVER = "senddatatoserver";
 var MOVE_PLAYERS = "moveplayers";
 var TEAM_0_WIN = "team0win";
 var TEAM_1_WIN = "team1win";
+var team0Score = 0;
+var team1Score = 0;
+var myTeamNumber = 0;
+var playAgainstAI = false;
 window.onload = function () {
     canvas = document.getElementById("canvas");
     ctx = canvas.getContext("2d");
@@ -45,35 +50,37 @@ window.onload = function () {
     canvas.onmouseup = function (event) {
         mouseState.down = false;
     };
-    document.addEventListener('keydown', function (event) {
-        //console.log(event.keyCode);
-        var k = event.keyCode;
-        if (k == 38 || k == 87){
-            keyState.up = 1;
-        } else if (k == 39 || k == 68){
-            keyState.right = 1;
-        } else if (k == 37 || k == 65){
-            keyState.left = 1;
-        } else if (k == 40 || k == 83){
-            keyState.down = 1;
-        } else if (k == 32){
-            keyState.space = 1;
-        }
-    });
-    document.addEventListener('keyup', function(event) {
-        var k = event.keyCode;
-        if (k == 38 || k == 87){
-            keyState.up = 0;
-        } else if (k == 39 || k == 68){
-            keyState.right = 0;
-        } else if (k == 37 || k == 65){
-            keyState.left = 0;
-        } else if (k == 40 || k == 83){
-            keyState.down = 0;
-        } else if (k == 32){
-            keyState.space = 0;
-        }
-    });
+    //document.addEventListener('keydown', function (event) {
+    //    //console.log(event.keyCode);
+    //    var k = event.keyCode;
+    //    if (k == 38 || k == 87){
+    //        keyState.up = 1;
+    //    } else if (k == 39 || k == 68){
+    //        keyState.right = 1;
+    //    } else if (k == 37 || k == 65){
+    //        keyState.left = 1;
+    //    } else if (k == 40 || k == 83){
+    //        keyState.down = 1;
+    //    } else if (k == 32){
+    //        keyState.space = 1;
+    //    }
+    //});
+    //document.addEventListener('keyup', function(event) {
+    //    var k = event.keyCode;
+    //    if (k == 38 || k == 87){
+    //        keyState.up = 0;
+    //    } else if (k == 39 || k == 68){
+    //        keyState.right = 0;
+    //    } else if (k == 37 || k == 65){
+    //        keyState.left = 0;
+    //    } else if (k == 40 || k == 83){
+    //        keyState.down = 0;
+    //    } else if (k == 32){
+    //        keyState.space = 0;
+    //    }
+    //});
+    document.getElementById("0").innerHTML = team0Score;
+    document.getElementById("1").innerHTML = team1Score;
     function updateInputState(){
         lastMouseState.x = mouseState.x;
         lastMouseState.y = mouseState.y;
@@ -95,15 +102,18 @@ window.onload = function () {
     var otherTeam = null;
     var myTeamAI = null;
     var otherTeamAI = null;
-    var updatables = null;
-    var drawables = null;
-    var pathObjs = null;
+    var updatables = [];
+    var drawables = [];
+    var pathObjs = [];
 
     var selectedPlayer = null;
     var curPathNode = null;
 
     var gameState = null;
     var server = new Server();
+
+    var timer = {totalTime: 3000};
+
     function changeGameState(state){
         console.log("New Game State: " + state);
         gameState = state;
@@ -118,6 +128,7 @@ window.onload = function () {
             team0 = [];
             team0.teamNumber = 0;
             team0.flag = flagTeam0;
+            team0.score = 0;
             var r = canW - canW * 0.3;
             var t = canH * 0.3;
             var m = canH * 0.5;
@@ -128,22 +139,30 @@ window.onload = function () {
             team1 = [];
             team1.teamNumber = 1;
             team1.flag = flagTeam1;
+            team1.score = 0;
             var l = canW * 0.3;
             team1.push(new Player(l, t, 1, 1));
             team1.push(new Player(l, m, 1, 2));
             team1.push(new Player(l, b, 1, 3));
 
-            myTeam = team1;
-            otherTeam = team0;
+            if (myTeamNumber) {
+                myTeam = team1;
+                otherTeam = team0;
+            } else {
+                myTeam = team0;
+                otherTeam = team1;
+            }
 
             //myTeamAI = new AI(myTeam, otherTeam, [
             //    neutralZones[0],
             //    neutralZones[2]
             //]);
-            otherTeamAI = new AI(otherTeam, myTeam, [
-                neutralZones[0],
-                neutralZones[1]
-            ]);
+            if (playAgainstAI) {
+                otherTeamAI = new AI(otherTeam, myTeam, [
+                    neutralZones[0],
+                    neutralZones[1]
+                ]);
+            }
 
             updatables = [];
             updatables.push(flagTeam0);
@@ -160,7 +179,30 @@ window.onload = function () {
             changeGameState(NEW_TURN);
 
         } else if (gameState == NEW_TURN){
-            // TODO: restart timer
+            timer.startTime = new Date().getTime();
+            timer.timer = setTimeout(function(){
+                //changeGameState(SEND_DATA_TO_SERVER); // this doesn't work because of concurrency
+                keyState.space = 1;
+                lastKeyState.space = 0;
+                if (timer.element){
+                    timer.element.style.visibility = "hidden";
+                }
+            }, timer.totalTime);
+            timer.element = document.getElementById("timer");
+            if (timer.element){
+                timer.element.style.visibility = "visible";
+            }
+            timer.update = function(){
+                if (timer.element) {
+                    var d = timer.diff();
+                    var sec = Math.floor(((timer.totalTime / 1000) + 1) - d / 1000)
+                    timer.element.innerHTML = (sec + "");
+                }
+            }
+            timer.diff = function(){
+                return new Date().getTime() - timer.startTime;
+            }
+
             var resetPlayer = function(player){
                 player.pathLen = 0;
             }
@@ -218,7 +260,7 @@ window.onload = function () {
                 // add curPathNode to updatables
                 updatables.push(curPathNode);
                 drawables.push(curPathNode);
-                // TODO: take this out of here and put it into the server response parse area
+
                 pathObjs.push(curPathNode);
             } else {
                 curPathNode = null;
@@ -316,25 +358,44 @@ window.onload = function () {
             team0.forEach(move);
             team1.forEach(move);
         } else if (gameState == TEAM_0_WIN){
-            // TODO: do stuff when they win
-            changeGameState(SETUP);
+            server.roundOver();
+            team0Score += 1;
+            document.getElementById("0").innerHTML = "" + team0Score;
+            document.getElementById("msg").innerHTML = "Red Team Scored!";
+            setTimeout(function(){
+                document.getElementById("msg").innerHTML = "";
+                changeGameState(SETUP);
+            }, 3000);
         } else if (gameState == TEAM_1_WIN){
-            // TODO: do stuff when they win
-            changeGameState(SETUP);
+            server.roundOver();
+            team1Score += 1;
+            document.getElementById("1").innerHTML = "" + team1Score;
+            document.getElementById("msg").innerHTML = "Blue Team Scored!";
+            setTimeout(function(){
+                document.getElementById("msg").innerHTML = "";
+                changeGameState(SETUP);
+            }, 3000);
         }
     }
-    changeGameState(SETUP);
 
-
+    changeGameState(WAIT_FOR_SERVER);
+    server.joinGameOrCreateGame(function(){
+        changeGameState(SETUP);
+    });
 
     setInterval(function(){
         ctx.fillStyle = "#33CC33";
         ctx.fillRect(0, 0, canW, canH);
+        if (gameState == WAIT_FOR_SERVER){
+            return;
+        }
 
         updatables.forEach(function(obj){if (obj.update){obj.update();}});
         drawables.forEach(function(obj){if (obj.draw){obj.draw();}});
         flagTeam0.drawTop();
         flagTeam1.drawTop();
+
+        timer.update();
 
         if (gameState == PICK_PLAYER && mouseState.down && ! lastMouseState.down) {
             selectedPlayer = null;
@@ -658,20 +719,65 @@ function PathNode(x, y, previousPathNode, nextPathNode, team){
 }
 
 function Server(){
-    sendData = function(data, callback){
-        // TODO: switch on doing rest call or not
-        setTimeout(function(){ // mock timeout
-            callback(data);
-        }, 10);
+    // request to join game and get game id, or create game and get a game id
+    var gameId = "game id from server?";
+
+    function remoteCall(data){
+        // TODO: handle data.method, data.url, data.port, data.body and data.callback
+        setTimeout(data.callback, 1000);
     }
+
+    this.joinGameOrCreateGame = function(callback){
+        remoteCall({
+            method: "get",
+            url: "something",
+            port: "3000",
+            body: null,
+            callback: function(data){
+                // TODO: put it back to a real call
+                gameId = "SOME ID";
+                myTeamNumber = 1;
+                playAgainstAI = false;
+
+                //gameId = data.id;
+                //myTeamNumber = data.teamNumber;
+                //playAgainstAI = data.playAgainstAI;
+                callback();
+            }
+        });
+    };
+
+    function sendData(data, callback){
+        if (data.b){
+            setTimeout(function(){
+                callback(data);
+            }, 10);
+        } else {
+            remoteCall({
+                method: "post",
+                url: "something",
+                port: "3000",
+                body: data,
+                callback: callback
+            });
+        }
+    };
     this.send = function(myTeamPaths, otherTeamPaths, callback){
         var data = {
-            id: "game id from server?"
+            id: gameId
         };
         data.a = myTeamPaths;
         data.b = otherTeamPaths;
         sendData(data, callback);
-    }
+    };
+    this.roundOver = function(){
+        // TODO: send win info to the server
+        remoteCall({
+            callback: function(data){
+                console.log("Got round over response ", data);
+            }
+        });
+    };
 }
 
 function AI(aiTeam, playerTeam, neutralZones){
@@ -804,11 +910,6 @@ function AI(aiTeam, playerTeam, neutralZones){
             }
         });
         numberOfDefenders();
-        //state.defenders.forEach(function(defender){
-        //    // TODO: decide which defender should go for which thing, and maybe do more complicated behavior?
-        //    var enemies = getEnemies(defender);
-        //
-        //});
     }
 
     this.getMoves = function(){
@@ -838,10 +939,10 @@ function AI(aiTeam, playerTeam, neutralZones){
                     self.getPath(ai, {x: pos.x - mid, y: pos.y}, d.path);
                 } else if (ai.aiRole == "attack") {
                     if (ai.carryingFlag){
-                        // TODO: goal should be to get back into home territory while avoiding defenders
+                        // goal should be to get back into home territory while avoiding defenders
                         self.getPath(ai, {x: self.team.flag.x, y: self.team.flag.y}, d.path);
                     } else {
-                        // TODO: goal should be to get to the flag while avoiding defenders
+                        // goal should be to get to the flag while avoiding defenders
                         self.getPath(ai, {x: self.others.flag.x, y: self.others.flag.y}, d.path);
                     }
 
