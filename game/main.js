@@ -718,68 +718,6 @@ function PathNode(x, y, previousPathNode, nextPathNode, team){
     }
 }
 
-function Server(){
-    // request to join game and get game id, or create game and get a game id
-    var gameId = "game id from server?";
-
-    function remoteCall(data){
-        // TODO: handle data.method, data.url, data.port, data.body and data.callback
-        setTimeout(data.callback, 1000);
-    }
-
-    this.joinGameOrCreateGame = function(callback){
-        remoteCall({
-            method: "get",
-            url: "something",
-            port: "3000",
-            body: null,
-            callback: function(data){
-                // TODO: put it back to a real call
-                gameId = "SOME ID";
-                myTeamNumber = 1;
-                playAgainstAI = false;
-
-                //gameId = data.id;
-                //myTeamNumber = data.teamNumber;
-                //playAgainstAI = data.playAgainstAI;
-                callback();
-            }
-        });
-    };
-
-    function sendData(data, callback){
-        if (data.b){
-            setTimeout(function(){
-                callback(data);
-            }, 10);
-        } else {
-            remoteCall({
-                method: "post",
-                url: "something",
-                port: "3000",
-                body: data,
-                callback: callback
-            });
-        }
-    };
-    this.send = function(myTeamPaths, otherTeamPaths, callback){
-        var data = {
-            id: gameId
-        };
-        data.a = myTeamPaths;
-        data.b = otherTeamPaths;
-        sendData(data, callback);
-    };
-    this.roundOver = function(){
-        // TODO: send win info to the server
-        remoteCall({
-            callback: function(data){
-                console.log("Got round over response ", data);
-            }
-        });
-    };
-}
-
 function AI(aiTeam, playerTeam, neutralZones){
     var self = this;
     this.team = aiTeam;
@@ -997,4 +935,88 @@ function AI(aiTeam, playerTeam, neutralZones){
         path.push(seg0);
         path.push(seg1);
     }
+}
+
+function Server() {
+    var socket = {};
+    var connected = false;
+    var serverJoinTimeout = 5000;
+
+    var responseCallback = null;
+    var readyCallback = null;
+    var joinTimeout = null;
+
+    function onResponse() {
+        if (responseCallback) {
+            responseCallback();
+        }
+    }
+
+    function onDisconnect() {
+
+    }
+
+    function onReady(data) {
+        if (readyCallback) {
+            readyCallback(data);
+        }
+    }
+
+    function onSync(data) {
+
+    }
+
+    function connect() {
+        connected = true;
+        console.log('connecting');
+        if (!socket.connected) socket = io(document.location.href);
+        socket.on('response', onResponse);
+        socket.on("sync", onSync);
+        socket.on('ready', onReady);
+        socket.on('disconnect', onDisconnect);
+    }
+
+
+    this.joinGameOrCreateGame = function (callback) {
+        connect();
+        readyCallback = function (data) {
+            if (joinTimeout) {
+                clearTimeout(joinTimeout);
+            }
+            myTeamNumber = data.teamNumber;
+            playAgainstAI = data.playAgainstAI;
+            callback();
+        }
+        joinTimeout = setTimeout(function () {
+            var cb = readyCallback
+            readyCallback = null;
+            if (cb)cb({
+                id: "LOCAL GAME",
+                teamNumber: 0,
+                playAgainstAI: true
+            })
+            socket.emit("quit", {});
+        }, serverJoinTimeout);
+    };
+
+    function sendData(data, callback) {
+        if (data.b) {
+            setTimeout(function () {
+                callback(data);
+            }, 10);
+        } else {
+            responseCallback = callback;
+            socket.emit("step", data);
+        }
+    }
+
+    this.send = function (myTeamPaths, otherTeamPaths, callback) {
+        sendData({a: myTeamPaths, b: otherTeamPaths}, callback);
+    };
+
+    this.roundOver = function(){}
+
+    this.sendSync = function (myTeam, otherTeam) {
+        socket.emit("clientsync", {});
+    };
 }
