@@ -122,10 +122,13 @@ Player.prototype.emitReady = function(data){
 
 
 io.on('connection', function(socket) {
+    log("Connection happend, yay!");
     var newPlayer = new Player(socket);
     if (!firstPlayer){
+        log("First player")
         firstPlayer = newPlayer;
     } else {
+        log("Second player")
         var a = firstPlayer;
         var b = newPlayer;
         firstPlayer = null;

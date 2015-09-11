@@ -946,9 +946,10 @@ function Server() {
     var readyCallback = null;
     var joinTimeout = null;
 
-    function onResponse() {
+    function onResponse(data) {
+        console.log("RESPONSE");
         if (responseCallback) {
-            responseCallback();
+            responseCallback(data);
         }
     }
 
@@ -957,6 +958,7 @@ function Server() {
     }
 
     function onReady(data) {
+        console.log("READY");
         if (readyCallback) {
             readyCallback(data);
         }
