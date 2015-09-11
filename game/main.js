@@ -302,9 +302,10 @@ window.onload = function () {
 
             var otherTeamPath = null;
             if (!otherTeamAI){
-                tempArray = [];
-                otherTeam.forEach(handleTempPath);
-                otherTeamPath = tempArray;
+                //tempArray = [];
+                //otherTeam.forEach(handleTempPath);
+                //otherTeamPath = tempArray;
+                // should leave it null for the server call?
             } else {
                 otherTeamPath = otherTeamAI.getMoves();
             }
@@ -954,7 +955,7 @@ function Server() {
     }
 
     function onDisconnect() {
-
+        console.log("DISCONNECTED");
     }
 
     function onReady(data) {
@@ -994,7 +995,7 @@ function Server() {
             readyCallback = null;
             if (cb)cb({
                 id: "LOCAL GAME",
-                teamNumber: 0,
+                teamNumber: 1,
                 playAgainstAI: true
             })
             socket.emit("quit", {});
@@ -1002,11 +1003,13 @@ function Server() {
     };
 
     function sendData(data, callback) {
+        console.log("Send data to server");
         if (data.b) {
             setTimeout(function () {
                 callback(data);
             }, 10);
         } else {
+            console.log("EMIT STEP");
             responseCallback = callback;
             socket.emit("step", data);
         }

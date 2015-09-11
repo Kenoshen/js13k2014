@@ -82,19 +82,21 @@ function Player(socket) {
 }
 
 Player.prototype.onStep = function(data) {
+    log("Step " + JSON.stringify(data));
     this.game.step(this, data.a);
 };
 
 Player.prototype.respond = function(mine, theirs) {
-    socket.emit("response", {a: mine, b: theirs})
+    this.socket.emit("response", {a: mine, b: theirs})
 };
 
 Player.prototype.onClientSync = function(data) {
+    log("Client sync");
     this.game.sync(this, data.a);
 };
 
 Player.prototype.sync = function(mine, theirs) {
-    socket.emit("sync", {a: mine, b: theirs})
+    this.socket.emit("sync", {a: mine, b: theirs})
 };
 
 Player.prototype.joinGame = function(game) {
@@ -103,7 +105,10 @@ Player.prototype.joinGame = function(game) {
 };
 
 Player.prototype.onExit = function() {
-    if (this==firstPlayer) firstPlayer = null;
+    if (this==firstPlayer) {
+        log("First player couldn't find someone, just left");
+        firstPlayer = null;
+    }
     if (!this.game) return;
     this.game.end('A Player left the game');
 };
