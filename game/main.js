@@ -40,16 +40,22 @@ window.onload = function () {
     var offset = getOffset(canvas);
     canX = offset.left;
     canY = offset.top;
-    canvas.onmousemove = function (event) {
+    var onMouseMove = function (event) {
         mouseState.x = event.clientX - canX;
         mouseState.y = event.clientY - canY;
     };
-    canvas.onmousedown = function (event) {
+    var onMouseDown = function (event) {
         mouseState.down = true;
     };
-    canvas.onmouseup = function (event) {
+    var onMouseUp = function (event) {
         mouseState.down = false;
     };
+    canvas.onmousemove = onMouseMove
+    canvas.onmousedown = onMouseDown
+    canvas.onmouseup = onMouseUp
+    canvas.ontouchmove = onMouseMove
+    canvas.ontouchstart = onMouseDown
+    canvas.ontouchend = onMouseUp
     //document.addEventListener('keydown', function (event) {
     //    //console.log(event.keyCode);
     //    var k = event.keyCode;
@@ -146,12 +152,17 @@ window.onload = function () {
             team1.push(new Player(l, b, 1, 3));
 
             if (myTeamNumber) {
+                document.getElementById("msg").innerHTML = "Blue Team";
                 myTeam = team1;
                 otherTeam = team0;
             } else {
+                document.getElementById("msg").innerHTML = "Red Team";
                 myTeam = team0;
                 otherTeam = team1;
             }
+            setTimeout(function(){
+                document.getElementById("msg").innerHTML = "";
+            }, 2000);
 
             //myTeamAI = new AI(myTeam, otherTeam, [
             //    neutralZones[0],
@@ -956,10 +967,18 @@ function Server() {
 
     function onDisconnect() {
         console.log("DISCONNECTED");
+        document.getElementById("msg").innerHTML = "Other Player Disconnected";
+        setTimeout(function(){
+            location.reload();
+        }, 3000);
     }
 
     function onReady(data) {
         console.log("READY");
+        document.getElementById("msg").innerHTML = "Found Another Player, Starting...";
+        setTimeout(function(){
+            document.getElementById("msg").innerHTML = "";
+        }, 2000);
         if (readyCallback) {
             readyCallback(data);
         }
@@ -993,6 +1012,10 @@ function Server() {
         joinTimeout = setTimeout(function () {
             var cb = readyCallback
             readyCallback = null;
+            document.getElementById("msg").innerHTML = "Couldn't Find Another Player.<br>Playing Against AI.";
+            setTimeout(function(){
+                document.getElementById("msg").innerHTML = "";
+            }, 2000);
             if (cb)cb({
                 id: "LOCAL GAME",
                 teamNumber: 1,
