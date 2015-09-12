@@ -30,9 +30,11 @@ fs.mkdir("tmp", function(err){
                                     fs.copy('game.json', 'tmp/' + gameName + '/game.json', { replace: true }, function (err) {
                                         fs.copy('game/index.html', 'tmp/' + gameName + '/game/index.html', { replace: true }, function (err) {
                                             fs.copy('game/package.json', 'tmp/' + gameName + '/game/package.json', { replace: true }, function (err) {
-                                                var zip5 = new EasyZip();
-                                                zip5.zipFolder('tmp/' + gameName,function(){
-                                                    zip5.writeToFile('tmp/' + gameName + '.zip');
+                                                fs.copy('preview.png', 'tmp/' + gameName + '/preview.png', { replace: true }, function (err) {
+                                                    var zip5 = new EasyZip();
+                                                    zip5.zipFolder('tmp/' + gameName,function(){
+                                                        zip5.writeToFile('tmp/' + gameName + '.zip');
+                                                    });
                                                 });
                                             });
                                         });
